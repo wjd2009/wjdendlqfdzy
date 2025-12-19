@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>冲泡 | 功夫茶 · 境</title>
+    <style>
+        /* =========================================
+           1. 基础设定 & 全局噪点
+           ========================================= */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #F2F0EB;
+            color: #2C2C2C;
+            font-family: "Songti SC", "Noto Serif SC", "SimSun", serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            /* 背景色随冲泡过程缓慢变暖 */
+            transition: background-color 10s linear; 
+            position: relative;
+        }
+
+        /* 全局宣纸噪点纹理 */
+        body::after {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.04'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 998; /* 略低于水墨游标 */
+        }
+
+        /* 冲泡时的背景变化 */
+        body.brewing {
+            background-color: #E0D8CF; 
+        }
+
+        #app {
+            text-align: center;
+            opacity: 0;
+            transition: opacity 1.5s ease;
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        #app.visible { opacity: 1; }
+        #app.fade-out { opacity: 0; transition: opacity 1.5s ease; }
+
+        /* =========================================
+           2. 文本与排版
+           ========================================= */
+        .tea-title {
+            font-size: 1rem;
+            letter-spacing: 0.3em;
+            margin-bottom: 20px;
+            color: #888;
+            font-weight: 300;
+            text-transform: uppercase;
+        }
+
+        #tea-name-display {
+            font-weight: 600;
+            color: #555;
+            margin-left: 0.3em;
+        }
+
+        /* =========================================
+           3. CSS 纯代码“热气/茶烟”动画
+           ========================================= */
+        .steam-container {
+            position: absolute;
+            top: 40px; /* 位于圆环上方 */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 100px;
+            z-index: 5;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 2s ease;
+        }
+
+        body.brewing .steam-container {
+            opacity: 1;
+        }
+
+        .steam {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            width: 6px;
+            height: 40px;
+            background: #fff;
+            border-radius: 50%;
+            filter: blur(6px); /* 模糊滤镜模拟气体 */
+            opacity: 0;
+        }
+
+        .s1 { animation: rise 3s infinite linear 0.5s; margin-left: -15px; }
+        .s2 { animation: rise 4s infinite linear 1.2s; margin-left: 0px; height: 50px; width: 8px;}
+        .s3 { animation: rise 3.5s infinite linear 2.0s; margin-left: 15px; }
+
+        @keyframes rise {
+            0% { transform: translateY(0) scaleX(1); opacity: 0; }
+            40% { opacity: 0.4; }
+            100% { transform: translateY(-80px) scaleX(3); opacity: 0; }
+        }
+
+        /* =========================================
+           4. SVG 倒计时圆环
+           ========================================= */
+        .timer-container {
+            position: relative;
+            width: 220px;
+            height: 220px;
+            margin: 0 auto 30px auto;
+            z-index: 10;
+        }
+
+        .timer-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 3rem;
+            font-family: 'Helvetica Neue', sans-serif;
+            font-weight: 100;
+            color: #2C2C2C;
+            opacity: 0.8;
+        }
+
+        svg {
+            transform: rotate(-90deg);
+            width: 100%;
+            height: 100%;
+        }
+
+        circle {
+            fill: none;
+            stroke-width: 1.5;
+            stroke-linecap: round;
+        }
+
+        .circle-bg { stroke: #e0e0e0; }
+
+        .circle-progress {
+            stroke: #2C2C2C;
+            stroke-dasharray: 691;
+            stroke-dashoffset: 691;
+            transition: stroke-dashoffset 10s linear;
+        }
+
+        .circle-progress.active { stroke-dashoffset: 0; }
+
+        /* =========================================
+           5. 叙事状态文字
+           ========================================= */
+        #status-text {
+            height: 2rem;
+            font-size: 1.1rem;
+            letter-spacing: 0.2em;
+            color: #2C2C2C;
+            font-weight: 500;
+            margin-bottom: 40px;
+            opacity: 0;
+            transition: opacity 0.8s ease;
+        }
+
+        /* =========================================
+           6. 操作按钮
+           ========================================= */
+        .action-btn {
+            background: transparent;
+            border: 1px solid #2C2C2C;
+            color: #2C2C2C;
+            padding: 10px 40px;
+            font-size: 1rem;
+            font-family: inherit;
+            letter-spacing: 0.2em;
+            cursor: pointer;
+            transition: all 0.5s ease;
+            outline: none;
+        }
+
+        .action-btn:hover {
+            background: #2C2C2C;
+            color: #fff;
+        }
+
+        .action-btn:disabled {
+            border-color: #ccc;
+            color: #bbb;
+            cursor: default;
+            background: transparent;
+        }
+
+        .hidden { display: none; opacity: 0; }
+        .fade-in-btn { animation: fadeIn 1s forwards; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="app">
+        <h3 class="tea-title">正在冲泡 <span id="tea-name-display">...</span></h3>
+
+        <!-- 热气动画层 -->
+        <div class="steam-container">
+            <div class="steam s1"></div>
+            <div class="steam s2"></div>
+            <div class="steam s3"></div>
+        </div>
+
+        <!-- 倒计时层 -->
+        <div class="timer-container">
+            <svg viewBox="0 0 230 230">
+                <circle class="circle-bg" cx="115" cy="115" r="110"></circle>
+                <circle class="circle-progress" id="progress-ring" cx="115" cy="115" r="110"></circle>
+            </svg>
+            <div class="timer-text" id="countdown">10</div>
+        </div>
+
+        <!-- 叙事状态文字 -->
+        <div id="status-text"></div>
+
+        <div class="controls">
+            <button id="brew-btn" class="action-btn">注 水</button>
+            <button id="finish-btn" class="action-btn hidden">完成品茶</button>
+        </div>
+    </div>
+
+    <!-- 水墨游标 Canvas -->
+    <canvas id="ink-cursor" style="position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:9999;"></canvas>
+
+    <script>
+        let audioCtx;
+        
+        /**
+         * 1. 极致轻柔的流水声生成器
+         * White Noise + HighPass(500Hz) + LowPass(800-600Hz)
+         * Gain: Max 0.08 (非常微弱，仅供氛围)
+         */
+        function playQuietWaterSound(duration) {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            const bufferSize = audioCtx.sampleRate * duration;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+
+            // 生成白噪声
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+
+            // 滤波器链：切掉浑浊低频，压住刺耳高频
+            const hpf = audioCtx.createBiquadFilter();
+            hpf.type = 'highpass';
+            hpf.frequency.value = 500; 
+
+            const lpf = audioCtx.createBiquadFilter();
+            lpf.type = 'lowpass';
+            lpf.frequency.setValueAtTime(800, audioCtx.currentTime);
+            lpf.frequency.linearRampToValueAtTime(600, audioCtx.currentTime + duration);
+
+            // 音量包络：极低音量
+            const gainNode = audioCtx.createGain();
+            const currTime = audioCtx.currentTime;
+            
+            gainNode.gain.setValueAtTime(0, currTime);
+            // 0.08 的音量，比上一版再小 50%
+            gainNode.gain.linearRampToValueAtTime(0.08, currTime + 1); 
+            gainNode.gain.linearRampToValueAtTime(0, currTime + duration);
+
+            // 连接
+            noise.connect(hpf);
+            hpf.connect(lpf);
+            lpf.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            noise.start();
+        }
+
+        /**
+         * 2. 全局点击音效 (UI Click)
+         * 模拟木石撞击声
+         */
+        function playClickSound() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const t = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(800, t);
+            osc.frequency.exponentialRampToValueAtTime(300, t + 0.1);
+
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.15, t + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(t);
+            osc.stop(t + 0.15);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const app = document.getElementById('app');
+            const teaNameSpan = document.getElementById('tea-name-display');
+            const brewBtn = document.getElementById('brew-btn');
+            const finishBtn = document.getElementById('finish-btn');
+            const progressRing = document.getElementById('progress-ring');
+            const countdownEl = document.getElementById('countdown');
+            const statusTextEl = document.getElementById('status-text');
+
+            // 初始化显示
+            const teaName = localStorage.getItem('selectedTeaName') || '功夫茶';
+            teaNameSpan.textContent = teaName;
+
+            setTimeout(() => {
+                app.classList.add('visible');
+            }, 100);
+
+            // 叙事阶段文案
+            const narrativeStages = {
+                10: "悬壶高冲",
+                7:  "茶芽舒展",
+                4:  "温润成汤",
+                1:  "静候回甘"
+            };
+
+            function updateStatusText(text) {
+                statusTextEl.style.opacity = 0;
+                setTimeout(() => {
+                    statusTextEl.textContent = text;
+                    statusTextEl.style.opacity = 1;
+                }, 300);
+            }
+
+            // 绑定点击音效到按钮
+            document.querySelectorAll('button').forEach(btn => {
+                btn.addEventListener('click', playClickSound);
+            });
+
+            // 冲泡逻辑
+            brewBtn.addEventListener('click', () => {
+                brewBtn.disabled = true;
+                brewBtn.textContent = "冲泡中...";
+                
+                // 播放超轻水声
+                playQuietWaterSound(10);
+
+                // 启动视觉
+                document.body.classList.add('brewing');
+                progressRing.classList.add('active');
+
+                let timeLeft = 10;
+                countdownEl.textContent = timeLeft;
+                updateStatusText(narrativeStages[10]);
+                
+                const timer = setInterval(() => {
+                    timeLeft--;
+                    countdownEl.textContent = timeLeft;
+                    
+                    if (narrativeStages[timeLeft]) {
+                        updateStatusText(narrativeStages[timeLeft]);
+                    }
+
+                    if (timeLeft <= 0) {
+                        clearInterval(timer);
+                        onBrewFinished();
+                    }
+                }, 1000);
+            });
+
+            function onBrewFinished() {
+                brewBtn.style.display = 'none';
+                statusTextEl.style.opacity = 0;
+                
+                finishBtn.classList.remove('hidden');
+                finishBtn.classList.add('fade-in-btn');
+                
+                countdownEl.textContent = "茶成";
+                countdownEl.style.fontSize = "2rem";
+                countdownEl.style.fontFamily = '"Songti SC", serif';
+            }
+
+            finishBtn.addEventListener('click', () => {
+                app.classList.remove('visible');
+                app.classList.add('fade-out');
+                setTimeout(() => {
+                    window.location.href = 'finish.html';
+                }, 1500);
+            });
+        });
+
+        /**
+         * 3. 水墨游标 (Ink Trail Cursor)
+         */
+        (function() {
+            const canvas = document.getElementById('ink-cursor');
+            const ctx = canvas.getContext('2d');
+            let width, height;
+            let particles = [];
+            
+            function resize() {
+                width = canvas.width = window.innerWidth;
+                height = canvas.height = window.innerHeight;
+            }
+            window.addEventListener('resize', resize);
+            resize();
+
+            let mouse = { x: -100, y: -100 };
+            window.addEventListener('mousemove', e => {
+                mouse.x = e.clientX;
+                mouse.y = e.clientY;
+                particles.push(new Particle(mouse.x, mouse.y));
+            });
+
+            class Particle {
+                constructor(x, y) {
+                    this.x = x; this.y = y;
+                    this.size = Math.random() * 15 + 5;
+                    this.vx = (Math.random() - 0.5) * 1;
+                    this.vy = (Math.random() - 0.5) * 1;
+                    this.life = 1;
+                    this.decay = 0.015;
+                }
+                update() {
+                    this.x += this.vx; this.y += this.vy;
+                    this.size *= 0.96;
+                    this.life -= this.decay;
+                }
+                draw(ctx) {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(60, 60, 60, ${this.life * 0.15})`;
+                    ctx.fill();
+                }
+            }
+
+            function animate() {
+                ctx.clearRect(0, 0, width, height);
+                for (let i = 0; i < particles.length; i++) {
+                    particles[i].update();
+                    particles[i].draw(ctx);
+                    if (particles[i].life <= 0 || particles[i].size < 0.5) {
+                        particles.splice(i, 1);
+                        i--;
+                    }
+                }
+                requestAnimationFrame(animate);
+            }
+            animate();
+        })();
+    </script>
+</body>
+</html>

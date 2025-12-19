@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>择 茗 | 功夫茶 · 境</title>
+    <style>
+        /* =========================================
+           1. 基础设定 & 全局噪点
+           ========================================= */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            background-color: #F2F0EB;
+            color: #2C2C2C;
+            font-family: "Songti SC", "Noto Serif SC", "SimSun", serif;
+            transition: background-color 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94); /* 平滑的背景色过渡 */
+            position: relative;
+        }
+
+        /* 全局宣纸噪点纹理 */
+        body::after {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.04'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 998;
+        }
+
+        /* =========================================
+           2. 页面容器
+           ========================================= */
+        #page-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0; /* 初始隐藏 */
+            transition: opacity 1.5s ease;
+            position: relative;
+            z-index: 10;
+        }
+
+        #page-container.visible { opacity: 1; }
+        #page-container.fade-out { opacity: 0; }
+
+        header {
+            margin-bottom: 60px;
+            text-align: center;
+        }
+        
+        h2 {
+            font-weight: 300;
+            letter-spacing: 0.5em;
+            font-size: 1.2rem;
+            color: #555;
+            position: relative;
+            display: inline-block;
+            text-transform: uppercase;
+        }
+
+        h2::after {
+            content: '';
+            display: block;
+            width: 40px;
+            height: 1px;
+            background: #bbb;
+            margin: 15px auto 0;
+            opacity: 0.5;
+        }
+
+        /* =========================================
+           3. 卡片交互区域
+           ========================================= */
+        .cards-wrapper {
+            display: flex;
+            gap: 50px;
+            perspective: 1200px; /* 3D 透视深度 */
+            padding: 20px;
+        }
+
+        .tea-card {
+            width: 160px;
+            height: 380px; /* 细长比例，仿木牌 */
+            background: #fff;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.03);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            
+            /* 交互动画 */
+            transition: 
+                transform 0.6s cubic-bezier(0.23, 1, 0.32, 1),
+                box-shadow 0.6s ease;
+        }
+
+        /* 竖排文字排版 */
+        .tea-name {
+            font-size: 1.8rem;
+            letter-spacing: 0.4em;
+            writing-mode: vertical-rl;
+            text-orientation: upright;
+            color: #333;
+            margin-left: 10px;
+            z-index: 2;
+        }
+
+        .tea-desc {
+            font-size: 0.8rem;
+            color: #999;
+            writing-mode: vertical-rl;
+            text-orientation: upright;
+            letter-spacing: 0.2em;
+            margin-right: 15px;
+            font-family: sans-serif;
+            font-weight: 300;
+            opacity: 0.8;
+        }
+
+        /* 底部色条装饰 */
+        .tea-card::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 6px;
+            opacity: 0.6;
+            transition: height 0.3s ease;
+        }
+
+        /* 不同茶的色条 */
+        .tea-card[data-type="dancong"]::after { background-color: #D4A017; } /* 蜜黄 */
+        .tea-card[data-type="tieguanyin"]::after { background-color: #558B2F; } /* 兰绿 */
+        .tea-card[data-type="puer"]::after { background-color: #5D4037; } /* 陈褐 */
+
+        /* =========================================
+           Hover 状态
+           ========================================= */
+        .tea-card:hover {
+            transform: translateY(-20px) rotateX(5deg); /* 上浮 + 倾斜 */
+            box-shadow: 0 30px 60px rgba(0,0,0,0.08);
+        }
+        
+        .tea-card:hover::after {
+            height: 10px; /* 色条微张 */
+        }
+
+        /* 点击状态 */
+        .tea-card:active {
+            transform: translateY(-10px) scale(0.98);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+            transition: transform 0.1s;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="page-container">
+        <header>
+            <h2>择 茗</h2>
+        </header>
+
+        <div class="cards-wrapper">
+            <!-- 
+                data-bg: 鼠标悬停时，页面背景变成该颜色
+                data-type: 存储的 Key
+                data-name: 显示的中文名
+            -->
+            <div class="tea-card" data-type="dancong" data-name="凤凰单丛" data-bg="#F4ECD8">
+                <span class="tea-desc">高香蜜韵</span>
+                <span class="tea-name">单丛</span>
+            </div>
+
+            <div class="tea-card" data-type="tieguanyin" data-name="铁观音" data-bg="#E6EFE6">
+                <span class="tea-desc">兰香观音</span>
+                <span class="tea-name">铁观音</span>
+            </div>
+
+            <div class="tea-card" data-type="puer" data-name="普洱" data-bg="#EBE4E1">
+                <span class="tea-desc">岁月陈醇</span>
+                <span class="tea-name">普洱</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 水墨游标 Canvas -->
+    <canvas id="ink-cursor" style="position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:9999;"></canvas>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('page-container');
+            const cards = document.querySelectorAll('.tea-card');
+            const body = document.body;
+
+            // 1. 入场动画
+            setTimeout(() => {
+                container.classList.add('visible');
+            }, 100);
+
+            // 2. 卡片交互逻辑
+            cards.forEach(card => {
+                // 悬停变色（环境色流转）
+                card.addEventListener('mouseenter', () => {
+                    const color = card.getAttribute('data-bg');
+                    body.style.backgroundColor = color;
+                });
+
+                // 移出恢复
+                card.addEventListener('mouseleave', () => {
+                    body.style.backgroundColor = '#F2F0EB';
+                });
+
+                // 点击选择
+                card.addEventListener('click', function() {
+                    // 播放音效
+                    playClickSound();
+
+                    const teaType = this.getAttribute('data-type');
+                    const teaName = this.getAttribute('data-name');
+
+                    localStorage.setItem('selectedTeaType', teaType);
+                    localStorage.setItem('selectedTeaName', teaName);
+
+                    // 离场动画
+                    container.classList.remove('visible');
+                    container.classList.add('fade-out');
+
+                    // 延迟跳转
+                    setTimeout(() => {
+                        window.location.href = 'brew.html';
+                    }, 1500);
+                });
+            });
+        });
+
+        /* =========================================
+           全局交互增强脚本 (点击音效 + 水墨游标)
+           ========================================= */
+        
+        let uiAudioCtx;
+
+        // 模拟木石撞击声
+        function playClickSound() {
+            if (!uiAudioCtx) uiAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const t = uiAudioCtx.currentTime;
+            const osc = uiAudioCtx.createOscillator();
+            const gain = uiAudioCtx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(800, t);
+            osc.frequency.exponentialRampToValueAtTime(300, t + 0.1);
+
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.15, t + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+
+            osc.connect(gain);
+            gain.connect(uiAudioCtx.destination);
+            
+            osc.start(t);
+            osc.stop(t + 0.15);
+        }
+
+        // 水墨游标
+        (function() {
+            const canvas = document.getElementById('ink-cursor');
+            const ctx = canvas.getContext('2d');
+            let width, height;
+            let particles = [];
+            
+            function resize() {
+                width = canvas.width = window.innerWidth;
+                height = canvas.height = window.innerHeight;
+            }
+            window.addEventListener('resize', resize);
+            resize();
+
+            let mouse = { x: -100, y: -100 };
+            window.addEventListener('mousemove', e => {
+                mouse.x = e.clientX;
+                mouse.y = e.clientY;
+                particles.push(new Particle(mouse.x, mouse.y));
+            });
+
+            class Particle {
+                constructor(x, y) {
+                    this.x = x; this.y = y;
+                    this.size = Math.random() * 15 + 5;
+                    this.vx = (Math.random() - 0.5) * 1;
+                    this.vy = (Math.random() - 0.5) * 1;
+                    this.life = 1;
+                    this.decay = 0.015;
+                }
+                update() {
+                    this.x += this.vx; this.y += this.vy;
+                    this.size *= 0.96;
+                    this.life -= this.decay;
+                }
+                draw(ctx) {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(60, 60, 60, ${this.life * 0.15})`;
+                    ctx.fill();
+                }
+            }
+
+            function animate() {
+                ctx.clearRect(0, 0, width, height);
+                for (let i = 0; i < particles.length; i++) {
+                    particles[i].update();
+                    particles[i].draw(ctx);
+                    if (particles[i].life <= 0 || particles[i].size < 0.5) {
+                        particles.splice(i, 1);
+                        i--;
+                    }
+                }
+                requestAnimationFrame(animate);
+            }
+            animate();
+        })();
+    </script>
+</body>
+</html>

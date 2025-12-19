@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>回甘 | 功夫茶 · 境</title>
+    <style>
+        /* =========================================
+           1. 基础设定 & 全局噪点
+           ========================================= */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            /* 保持 brew.html 结束时的温润茶色，实现无缝衔接 */
+            background-color: #E0D8CF; 
+            color: #2C2C2C;
+            font-family: "Songti SC", "Noto Serif SC", "SimSun", serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        /* 全局宣纸噪点纹理 */
+        body::after {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.04'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 998;
+        }
+
+        #app {
+            max-width: 600px;
+            text-align: center;
+            padding: 40px;
+            opacity: 0;
+            transition: opacity 1s ease;
+            position: relative;
+            z-index: 10;
+        }
+
+        #app.visible { opacity: 1; }
+        #app.fade-out { opacity: 0; transition: opacity 1.5s ease; }
+
+        /* =========================================
+           2. 内容排版
+           ========================================= */
+        
+        .result-tea {
+            font-size: 0.9rem;
+            letter-spacing: 0.4em;
+            color: #888;
+            margin-bottom: 40px;
+            text-transform: uppercase;
+        }
+
+        /* 诗句容器 (相对定位用于放置印章) */
+        .poem-container {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 60px;
+        }
+
+        .zen-poem {
+            font-size: 1.8rem;
+            line-height: 1.8;
+            font-weight: 500;
+            color: #1a1a1a;
+            white-space: pre-line; /* 允许换行符 */
+            text-shadow: 0 0 1px rgba(0,0,0,0.1);
+        }
+
+        /* 落款印章 */
+        .stamp-mark {
+            position: absolute;
+            bottom: -20px;
+            right: -40px;
+            width: 34px;
+            height: 34px;
+            border: 2px solid #A93226;
+            border-radius: 4px;
+            color: #A93226;
+            font-size: 0.9rem;
+            line-height: 30px;
+            text-align: center;
+            opacity: 0;
+            transform: scale(1.5) rotate(-10deg);
+            /* 印章落下的弹跳动画 */
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            font-weight: bold;
+            letter-spacing: 0;
+            background: rgba(255,255,255,0.1);
+        }
+
+        .stamp-mark.show {
+            opacity: 0.8;
+            transform: scale(1) rotate(-8deg);
+        }
+
+        /* 逐行淡入动画类 */
+        .fade-item {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 1.2s ease-out, transform 1.2s ease-out;
+        }
+
+        .fade-item.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* =========================================
+           3. 底部操作栏
+           ========================================= */
+        .btn-group {
+            display: flex;
+            gap: 40px;
+            justify-content: center;
+            margin-top: 40px;
+        }
+
+        .nav-btn {
+            background: transparent;
+            border: none;
+            color: #555;
+            font-size: 0.9rem;
+            font-family: "Songti SC", serif;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            padding: 8px 12px;
+            position: relative;
+            transition: color 0.3s;
+        }
+
+        .nav-btn::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            width: 0;
+            height: 1px;
+            background: #2C2C2C;
+            transition: width 0.3s ease, left 0.3s ease;
+        }
+
+        .nav-btn:hover { color: #000; }
+        .nav-btn:hover::after { width: 100%; left: 0; }
+
+        /* =========================================
+           4. 余烟动画 (底部装饰)
+           ========================================= */
+        .steam-container {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 100px;
+            pointer-events: none;
+            opacity: 0.5;
+            z-index: 5;
+        }
+
+        .steam {
+            position: absolute;
+            bottom: -20px;
+            left: 50%;
+            width: 4px;
+            height: 60px;
+            background: #fff;
+            filter: blur(8px);
+            animation: rise 5s infinite linear;
+            opacity: 0;
+        }
+
+        @keyframes rise {
+            0% { transform: translateY(0); opacity: 0; }
+            50% { opacity: 0.4; }
+            100% { transform: translateY(-100px); opacity: 0; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="app">
+        <!-- 茶名回显 -->
+        <div class="result-tea fade-item" id="tea-type-display">
+            —— 品 · 茗 ——
+        </div>
+
+        <!-- 核心诗句 & 印章 -->
+        <div class="poem-container fade-item">
+            <h1 class="zen-poem" id="poem-display">
+                <!-- JS 填充 -->
+            </h1>
+            <div class="stamp-mark" id="stamp">茶</div>
+        </div>
+
+        <!-- 按钮组 -->
+        <div class="btn-group fade-item">
+            <button class="nav-btn" id="restart-btn">再续一壶</button>
+            <button class="nav-btn" id="home-btn">返回封面</button>
+        </div>
+    </div>
+
+    <!-- 底部余烟：象征回甘 -->
+    <div class="steam-container">
+        <div class="steam" style="animation-delay: 0s;"></div>
+        <div class="steam" style="animation-delay: 2s; margin-left: 20px;"></div>
+        <div class="steam" style="animation-delay: 3.5s; margin-left: -20px; height: 40px;"></div>
+    </div>
+
+    <!-- 水墨游标 Canvas -->
+    <canvas id="ink-cursor" style="position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:9999;"></canvas>
+
+    <script>
+        const POEMS = {
+            'dancong': "山韵蜜兰  入魂一香\n浮生若茶  甘苦自尝",
+            'tieguanyin': "兰香幽远  观音韵长\n静心守意  万物皆安",
+            'puer': "岁月沉淀  陈醇温厚\n时光煮雨  慢饮人间",
+            'default': "茶烟轻扬  落纸云烟\n心无挂碍  便是人间"
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const app = document.getElementById('app');
+            const fadeItems = document.querySelectorAll('.fade-item');
+            const stamp = document.getElementById('stamp');
+            const teaTypeDisplay = document.getElementById('tea-type-display');
+            const poemDisplay = document.getElementById('poem-display');
+
+            // 1. 获取数据
+            const selectedType = localStorage.getItem('selectedTeaType') || 'default';
+            const selectedName = localStorage.getItem('selectedTeaName');
+
+            // 2. 渲染内容
+            if (selectedName) {
+                teaTypeDisplay.innerText = `—— ${selectedName} ——`;
+            }
+            poemDisplay.innerText = POEMS[selectedType] || POEMS['default'];
+
+            // 3. 动画序列
+            // 显示容器
+            app.classList.add('visible');
+
+            // 级联显示元素
+            fadeItems.forEach((item, index) => {
+                setTimeout(() => {
+                    item.classList.add('show');
+                }, 300 + (index * 600));
+            });
+
+            // 最后盖章 (2秒后)
+            setTimeout(() => {
+                stamp.classList.add('show');
+                playClickSound(); // 盖章时也播放一声短促音效，增加质感
+            }, 2000);
+
+            // 4. 按钮逻辑
+            const restartBtn = document.getElementById('restart-btn');
+            const homeBtn = document.getElementById('home-btn');
+
+            const handleNavigate = (url) => {
+                playClickSound();
+                app.classList.remove('visible');
+                app.classList.add('fade-out');
+                setTimeout(() => {
+                    window.location.href = url;
+                }, 1000); // 等待淡出
+            };
+
+            restartBtn.addEventListener('click', () => {
+                // 清除选择，但保留用户习惯（可选）
+                localStorage.removeItem('selectedTeaType');
+                localStorage.removeItem('selectedTeaName');
+                handleNavigate('select.html');
+            });
+
+            homeBtn.addEventListener('click', () => {
+                localStorage.clear();
+                handleNavigate('index.html');
+            });
+        });
+
+        /* =========================================
+           全局交互增强脚本 (点击音效 + 水墨游标)
+           ========================================= */
+        
+        let uiAudioCtx;
+
+        function playClickSound() {
+            if (!uiAudioCtx) uiAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const t = uiAudioCtx.currentTime;
+            const osc = uiAudioCtx.createOscillator();
+            const gain = uiAudioCtx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(800, t);
+            osc.frequency.exponentialRampToValueAtTime(300, t + 0.1);
+
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.15, t + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+
+            osc.connect(gain);
+            gain.connect(uiAudioCtx.destination);
+            
+            osc.start(t);
+            osc.stop(t + 0.15);
+        }
+
+        // 水墨游标
+        (function() {
+            const canvas = document.getElementById('ink-cursor');
+            const ctx = canvas.getContext('2d');
+            let width, height;
+            let particles = [];
+            
+            function resize() {
+                width = canvas.width = window.innerWidth;
+                height = canvas.height = window.innerHeight;
+            }
+            window.addEventListener('resize', resize);
+            resize();
+
+            let mouse = { x: -100, y: -100 };
+            window.addEventListener('mousemove', e => {
+                mouse.x = e.clientX;
+                mouse.y = e.clientY;
+                particles.push(new Particle(mouse.x, mouse.y));
+            });
+
+            class Particle {
+                constructor(x, y) {
+                    this.x = x; this.y = y;
+                    this.size = Math.random() * 15 + 5;
+                    this.vx = (Math.random() - 0.5) * 1;
+                    this.vy = (Math.random() - 0.5) * 1;
+                    this.life = 1;
+                    this.decay = 0.015;
+                }
+                update() {
+                    this.x += this.vx; this.y += this.vy;
+                    this.size *= 0.96;
+                    this.life -= this.decay;
+                }
+                draw(ctx) {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(60, 60, 60, ${this.life * 0.15})`;
+                    ctx.fill();
+                }
+            }
+
+            function animate() {
+                ctx.clearRect(0, 0, width, height);
+                for (let i = 0; i < particles.length; i++) {
+                    particles[i].update();
+                    particles[i].draw(ctx);
+                    if (particles[i].life <= 0 || particles[i].size < 0.5) {
+                        particles.splice(i, 1);
+                        i--;
+                    }
+                }
+                requestAnimationFrame(animate);
+            }
+            animate();
+        })();
+    </script>
+</body>
+</html>
